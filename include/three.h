@@ -1,331 +1,259 @@
-﻿#include <iostream>
+﻿#pragma once
+
 #include <stdexcept>
-#include <deque>
+#include <stack>
+#include <string>
+#include "polinom.h"
 
+class AVLTree {
+    struct TreeNode {
+        std::string key;
+        Polinom value;
+        TreeNode* left = nullptr;
+        TreeNode* right = nullptr;
+        int height = 1;
 
-template<typename T>
-class List {
-    struct Node {
-        T data;
-        Node* next;
-
-        Node(T val) : data(val), next(nullptr) {}
+        TreeNode(const std::string& k, const Polinom& v)
+            : key(k), value(v) {
+        }
     };
 
-private:
-    Node* head;
-    Node* tail;
-    size_t list_size;
+    TreeNode* root = nullptr;
+    int elementCount = 0;
 
-    Node* get_node(size_t index) const {
-        if (index >= list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        Node* current = head;
-        for (size_t i = 0; i < index; ++i) {
-            current = current->next;
-        }
-        return current;
+    int getHeight(TreeNode* node) const {
+        return node ? node->height : 0;
     }
 
-    void clear() {
-        while (head != nullptr) {
-            Node* temp = head;
-            head = head->next;
-            delete temp;
+    int getBalanceFactor(TreeNode* node) const {
+        return node ? getHeight(node->left) - getHeight(node->right) : 0;
+    }
+
+    void updateHeight(TreeNode* node) {
+        if (node) node->height = std::max(getHeight(node->left), getHeight(node->right)) + 1;
+    }
+
+    TreeNode* rotateRight(TreeNode* y) {
+        TreeNode* x = y->left;
+        y->left = x->right;
+        x->right = y;
+        updateHeight(y);
+        updateHeight(x);
+        return x;
+    }
+
+    TreeNode* rotateLeft(TreeNode* x) {
+        TreeNode* y = x->right;
+        x->right = y->left;
+        y->left = x;
+        updateHeight(x);
+        updateHeight(y);
+        return y;
+    }
+
+    TreeNode* rebalanceNode(TreeNode* node) {
+        if (!node) return node;
+
+        updateHeight(node);
+        int balance = getBalanceFactor(node);
+
+        if (balance > 1) {
+            if (getBalanceFactor(node->left) < 0)
+                node->left = rotateLeft(node->left);
+            return rotateRight(node);
         }
-        head = tail = nullptr;
-        list_size = 0;
+        if (balance < -1) {
+            if (getBalanceFactor(node->right) > 0)
+                node->right = rotateRight(node->right);
+            return rotateLeft(node);
+        }
+        return node;
+    }
+
+    TreeNode* insertNode(TreeNode* node, const std::string& key, const Polinom& value) {
+        if (!node) {
+            elementCount++;
+            return new TreeNode(key, value);
+        }
+
+        if (key < node->key)
+            node->left = insertNode(node->left, key, value);
+        else if (key > node->key)
+            node->right = insertNode(node->right, key, value);
+        else
+            throw std::runtime_error("Duplicate key detected");
+
+        return rebalanceNode(node);
+    }
+
+    TreeNode* findMinNode(TreeNode* node) const {
+        while (node && node->left) node = node->left;
+        return node;
+    }
+
+    TreeNode* removeNode(TreeNode* node, const std::string& key) {
+        if (!node) return node;
+
+        if (key < node->key)
+            node->left = removeNode(node->left, key);
+        else if (key > node->key)
+            node->right = removeNode(node->right, key);
+        else {
+            if (!node->left || !node->right) {
+                TreeNode* temp = node->left ? node->left : node->right;
+                if (!temp) {
+                    temp = node;
+                    node = nullptr;
+                }
+                else {
+                    *node = *temp;
+                }
+                delete temp;
+                elementCount--;
+            }
+            else {
+                TreeNode* temp = findMinNode(node->right);
+                node->key = temp->key;
+                node->value = temp->value;
+                node->right = removeNode(node->right, temp->key);
+            }
+        }
+        return rebalanceNode(node);
+    }
+
+    bool compareTrees(TreeNode* a, TreeNode* b) const {
+        if (!a && !b) return true;
+        if (!a || !b) return false;
+        return a->key == b->key && a->value == b->value &&
+            compareTrees(a->left, b->left) && compareTrees(a->right, b->right);
+    }
+
+    TreeNode* cloneTree(TreeNode* node) const {
+        if (!node) return nullptr;
+        TreeNode* newNode = new TreeNode(node->key, node->value);
+        newNode->left = cloneTree(node->left);
+        newNode->right = cloneTree(node->right);
+        newNode->height = node->height;
+        return newNode;
+    }
+
+    void clearTree(TreeNode* node) {
+        if (node) {
+            clearTree(node->left);
+            clearTree(node->right);
+            delete node;
+        }
     }
 
 public:
-    List() : head(nullptr), tail(nullptr), list_size(0) {}
+    AVLTree() = default;
+    AVLTree(const AVLTree& src) : root(cloneTree(src.root)), elementCount(src.elementCount) {}
+    ~AVLTree() { clearTree(root); }
 
-    List(int n, T val = T()) : head(nullptr), tail(nullptr), list_size(0) {
-        if (n < 0) {
-            throw std::invalid_argument("List size cannot be negative");
+    AVLTree& operator=(const AVLTree& rhs) {
+        if (this != &rhs) {
+            clearTree(root);
+            root = cloneTree(rhs.root);
+            elementCount = rhs.elementCount;
         }
-        for (int i = 0; i < n; ++i) {
-            append(val);
-        }
-    }
-
-    ~List() {
-        clear();
-    }
-
-    List(const List& other) : head(nullptr), tail(nullptr), list_size(0) {
-        Node* current = other.head;
-        while (current != nullptr) {
-            append(current->data);
-            current = current->next;
-        }
-    }
-
-    List& operator=(const List& other) {
-        if (this == &other) {
-            return *this;
-        }
-
-        clear();
-
-        Node* current = other.head;
-        while (current != nullptr) {
-            append(current->data);
-            current = current->next;
-        }
-
         return *this;
     }
 
-    void append(T val) {
-        Node* new_node = new Node(val);
-        if (head == nullptr) {
-            head = tail = new_node;
-        }
-        else {
-            tail->next = new_node;
-            tail = new_node;
-        }
-        ++list_size;
+    void insert(const std::string& key, const Polinom& value) {
+        root = insertNode(root, key, value);
     }
 
-    T& operator[](size_t index) {
-        return get_node(index)->data;
+    void erase(const std::string& key) {
+        root = removeNode(root, key);
     }
 
-    const T& operator[](size_t index) const {
-        return get_node(index)->data;
+    Polinom find(const std::string& key) const {
+        TreeNode* current = root;
+        while (current) {
+            if (key < current->key)
+                current = current->left;
+            else if (key > current->key)
+                current = current->right;
+            else
+                return current->value;
+        }
+        throw std::runtime_error("Key not found in tree");
     }
 
-    size_t size() const {
-        return list_size;
+    int size() const { return elementCount; }
+    int height() const { return getHeight(root); }
+    bool empty() const { return !root; }
+
+    bool operator==(const AVLTree& other) const {
+        return compareTrees(root, other.root);
     }
 
-    void insert(T val, size_t index) {
-        if (index > list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        if (index == 0) {
-            insert_front(val);
-            return;
-        }
-        if (index == list_size) {
-            append(val);
-            return;
-        }
-        Node* prev = get_node(index - 1);
-        Node* new_node = new Node(val);
-        new_node->next = prev->next;
-        prev->next = new_node;
-        ++list_size;
-    }
-
-    void insert_front(T val) {
-        Node* new_node = new Node(val);
-        if (head == nullptr) {
-            head = tail = new_node;
-        }
-        else {
-            new_node->next = head;
-            head = new_node;
-        }
-        ++list_size;
-    }
-
-    void erase(size_t index) {
-        if (index >= list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        if (index == 0) {
-            erase_front();
-            return;
-        }
-        Node* prev = get_node(index - 1);
-        Node* to_delete = prev->next;
-        prev->next = to_delete->next;
-        if (to_delete == tail) {
-            tail = prev;
-        }
-        delete to_delete;
-        --list_size;
-
-        if (list_size == 0) {
-            head = tail = nullptr;
-        }
-    }
-
-    void erase_front() {
-        if (head == nullptr) {
-            throw std::underflow_error("List is empty");
-        }
-        Node* to_delete = head;
-        head = head->next;
-        if (head == nullptr) {
-            tail = nullptr;
-        }
-        delete to_delete;
-        --list_size;
-    }
-
-    size_t find(T val) const {
-        Node* current = head;
-        size_t index = 0;
-        while (current != nullptr) {
-            if (current->data == val) {
-                return index;
-            }
-            current = current->next;
-            ++index;
-        }
-        throw std::logic_error("Value not found in the list");
-    }
-
-    T get_first() const {
-        if (head == nullptr) {
-            throw std::underflow_error("List is empty");
-        }
-        return head->data;
-    }
-
-    bool operator==(const List& other) const {
-        if (list_size != other.list_size) {
-            return false;
-        }
-        Node* current1 = head;
-        Node* current2 = other.head;
-        while (current1 != nullptr) {
-            if (current1->data != current2->data) {
-                return false;
-            }
-            current1 = current1->next;
-            current2 = current2->next;
-        }
-        return true;
-    }
-
-    friend std::ostream& operator<<(std::ostream& os, const List& list) {
-        Node* current = list.head;
-        while (current != nullptr) {
-            os << current->data << " ";
-            current = current->next;
-        }
-        return os;
-    }
-    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //!!!!!!!!!!! Zadacha 3!!!!!!!!!!!!!!!
-    //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    T find_kth_from_end(size_t k) const {
-        if (k >= list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        Node* first = head;
-        Node* second = head;
-        for (size_t i = 0; i < k; ++i) {
-            if (second == nullptr) {
-                throw std::out_of_range("Index out of range");
-            }
-            second = second->next;
-        }
-        while (second->next != nullptr) {
-            first = first->next;
-            second = second->next;
-        }
-        return first->data;
+    bool operator!=(const AVLTree& other) const {
+        return !(*this == other);
     }
 
     class Iterator {
-        Node* curr;
+    private:
+        std::stack<TreeNode*> nodes;
+        TreeNode* current;
+
+        void pushLeft(TreeNode* node) {
+            while (node != nullptr) {
+                nodes.push(node);
+                node = node->left;
+            }
+        }
 
     public:
-        Iterator(Node* node) : curr(node) {}
+        Iterator(TreeNode* root) : current(nullptr) {
+            pushLeft(root);
+            if (!nodes.empty()) {
+                current = nodes.top();
+                nodes.pop();
+            }
+        }
+
+        Iterator() : current(nullptr) {}
+
+        const std::string& key() const {
+            if (current == nullptr) {
+                throw std::out_of_range("Iterator is out of range");
+            }
+            return current->key;
+        }
+
+        const Polinom& value() const {
+            if (current == nullptr) {
+                throw std::out_of_range("Iterator is out of range");
+            }
+            return current->value;
+        }
 
         Iterator& operator++() {
-            if (!curr->next) {
-                throw std::out_of_range("Out of range");
+            if (current == nullptr) {
+                return *this;
             }
-            curr = curr->next;
+
+            pushLeft(current->right);
+            if (nodes.empty()) {
+                current = nullptr;
+            }
+            else {
+                current = nodes.top();
+                nodes.pop();
+            }
             return *this;
         }
 
-        Iterator operator++(int) {
-            if (!curr->next) {
-                throw std::out_of_range("Out of range");
-            }
-            Iterator copy = *this;
-            curr = curr->next;
-            return copy;
+        bool operator==(const Iterator& other) const {
+            return current == other.current;
         }
 
-        T& operator*() {
-            return curr->data;
-        }
-
-        T* operator->() {
-            return &(curr->data);
-        }
-
-        friend bool operator!=(const Iterator& it1, const Iterator& it2) {
-            return it1.curr != it2.curr;
-        }
-
-        friend bool operator==(const Iterator& it1, const Iterator& it2) {
-            return it1.curr == it2.curr;
+        bool operator!=(const Iterator& other) const {
+            return current != other.current;
         }
     };
 
-    Iterator begin() {
-        return Iterator(head);
-    }
-
-    Iterator end() {
-        return Iterator(nullptr);
-    }
+    Iterator begin() const { return Iterator(root); }
+    Iterator end() const { return Iterator(); }
 };
-
-
-
-template<typename T>
-class Queue {
-private:
-    std::deque<T> data;
-
-public:
-    Queue(int n = 0, T value = T()) {
-        if (n < 0) {
-            throw std::invalid_argument("negative size");
-        }
-        for (int i = 0; i < n; ++i) {
-            data.push_back(value);
-        }
-    }
-
-    void enqueue(const T& val) noexcept {
-        data.push_back(val);
-    }
-
-    void dequeue() {
-        if (isEmpty()) {
-            throw std::underflow_error("Queue Empty");
-        }
-        data.pop_front();
-    }
-
-    T& front() {
-        if (isEmpty()) {
-            throw std::underflow_error("Queue Empty");
-        }
-        return data.front();
-    }
-
-    bool isEmpty() const noexcept {
-        return data.empty();
-    }
-
-    size_t getSize() const noexcept {
-        return data.size();
-    }
-};
-

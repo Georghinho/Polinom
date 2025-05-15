@@ -1,331 +1,115 @@
 ﻿#include <iostream>
+#include <vector>
+#include <tuple>
+#include <string>
+#include <functional>
 #include <stdexcept>
-#include <deque>
+#include <algorithm>
+#include "polinom.h"
 
-
-template<typename T>
-class List {
-    struct Node {
-        T data;
-        Node* next;
-
-        Node(T val) : data(val), next(nullptr) {}
-    };
-
+class PolinomHashTable {
 private:
-    Node* head;
-    Node* tail;
-    size_t list_size;
+    std::vector<std::vector<std::tuple<std::string, Polinom, bool>>> table;
+    size_t count_element = 0;
+    double MAX_LOAD_FACTOR = 0.7;
 
-    Node* get_node(size_t index) const {
-        if (index >= list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        Node* current = head;
-        for (size_t i = 0; i < index; ++i) {
-            current = current->next;
-        }
-        return current;
+    bool fullTable() {
+        if (table.empty()) return false;
+        double loadFactor = static_cast<double>(count_element) / table.size();
+        return (loadFactor > MAX_LOAD_FACTOR);
     }
 
-    void clear() {
-        while (head != nullptr) {
-            Node* temp = head;
-            head = head->next;
-            delete temp;
+    void rehash() {
+        size_t new_size = table.size() * 2 + 1;
+        std::vector<std::vector<std::tuple<std::string, Polinom, bool>>> new_table(new_size);
+        for (auto& bucket : table) {
+            for (auto& entry : bucket) {
+                if (std::get<2>(entry)) {
+                    size_t new_index = std::hash<std::string>{}(std::get<0>(entry)) % new_size;
+                    new_table[new_index].push_back(entry);
+                }
+            }
         }
-        head = tail = nullptr;
-        list_size = 0;
+        table = std::move(new_table);
     }
 
 public:
-    List() : head(nullptr), tail(nullptr), list_size(0) {}
-
-    List(int n, T val = T()) : head(nullptr), tail(nullptr), list_size(0) {
-        if (n < 0) {
-            throw std::invalid_argument("List size cannot be negative");
-        }
-        for (int i = 0; i < n; ++i) {
-            append(val);
-        }
+    PolinomHashTable() : count_element(0), MAX_LOAD_FACTOR(0.7) {
+        table.resize(1);
     }
 
-    ~List() {
-        clear();
+    PolinomHashTable(int n) : count_element(0), MAX_LOAD_FACTOR(0.7) {
+        if (n <= 0) {
+            n = 1;
+        }
+        table.resize(n);
     }
 
-    List(const List& other) : head(nullptr), tail(nullptr), list_size(0) {
-        Node* current = other.head;
-        while (current != nullptr) {
-            append(current->data);
-            current = current->next;
-        }
+    size_t hash_function(const std::string& key) const {
+        return std::hash<std::string>{}(key) % table.size();
     }
 
-    List& operator=(const List& other) {
-        if (this == &other) {
-            return *this;
+    void insert(const std::string& key, const Polinom& value) {
+        if (fullTable()) {
+            rehash();
         }
 
-        clear();
-
-        Node* current = other.head;
-        while (current != nullptr) {
-            append(current->data);
-            current = current->next;
-        }
-
-        return *this;
-    }
-
-    void append(T val) {
-        Node* new_node = new Node(val);
-        if (head == nullptr) {
-            head = tail = new_node;
-        }
-        else {
-            tail->next = new_node;
-            tail = new_node;
-        }
-        ++list_size;
-    }
-
-    T& operator[](size_t index) {
-        return get_node(index)->data;
-    }
-
-    const T& operator[](size_t index) const {
-        return get_node(index)->data;
-    }
-
-    size_t size() const {
-        return list_size;
-    }
-
-    void insert(T val, size_t index) {
-        if (index > list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        if (index == 0) {
-            insert_front(val);
-            return;
-        }
-        if (index == list_size) {
-            append(val);
-            return;
-        }
-        Node* prev = get_node(index - 1);
-        Node* new_node = new Node(val);
-        new_node->next = prev->next;
-        prev->next = new_node;
-        ++list_size;
-    }
-
-    void insert_front(T val) {
-        Node* new_node = new Node(val);
-        if (head == nullptr) {
-            head = tail = new_node;
-        }
-        else {
-            new_node->next = head;
-            head = new_node;
-        }
-        ++list_size;
-    }
-
-    void erase(size_t index) {
-        if (index >= list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        if (index == 0) {
-            erase_front();
-            return;
-        }
-        Node* prev = get_node(index - 1);
-        Node* to_delete = prev->next;
-        prev->next = to_delete->next;
-        if (to_delete == tail) {
-            tail = prev;
-        }
-        delete to_delete;
-        --list_size;
-
-        if (list_size == 0) {
-            head = tail = nullptr;
-        }
-    }
-
-    void erase_front() {
-        if (head == nullptr) {
-            throw std::underflow_error("List is empty");
-        }
-        Node* to_delete = head;
-        head = head->next;
-        if (head == nullptr) {
-            tail = nullptr;
-        }
-        delete to_delete;
-        --list_size;
-    }
-
-    size_t find(T val) const {
-        Node* current = head;
-        size_t index = 0;
-        while (current != nullptr) {
-            if (current->data == val) {
-                return index;
+        size_t index = hash_function(key);
+        for (auto& entry : table[index]) {
+            if (std::get<0>(entry) == key) {
+                if (!std::get<2>(entry)) {
+                    std::get<1>(entry) = value;
+                    std::get<2>(entry) = true;
+                    count_element++;
+                    return;
+                }
+                else {
+                    std::get<1>(entry) = value;
+                    return;
+                }
             }
-            current = current->next;
-            ++index;
         }
-        throw std::logic_error("Value not found in the list");
+        table[index].push_back(std::make_tuple(key, value, true));
+        count_element++;
     }
 
-    T get_first() const {
-        if (head == nullptr) {
-            throw std::underflow_error("List is empty");
+    Polinom find(const std::string& key) {
+        if (table.empty()) {
+            throw std::runtime_error("Element not found: empty table");
         }
-        return head->data;
-    }
-
-    bool operator==(const List& other) const {
-        if (list_size != other.list_size) {
-            return false;
-        }
-        Node* current1 = head;
-        Node* current2 = other.head;
-        while (current1 != nullptr) {
-            if (current1->data != current2->data) {
-                return false;
+        size_t index = hash_function(key);
+        for (auto& entry : table[index]) {
+            if (std::get<0>(entry) == key && std::get<2>(entry)) {
+                return std::get<1>(entry);
             }
-            current1 = current1->next;
-            current2 = current2->next;
         }
-        return true;
+        throw std::runtime_error("Element '" + key + "' not found");
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const List& list) {
-        Node* current = list.head;
-        while (current != nullptr) {
-            os << current->data << " ";
-            current = current->next;
+    void erase(const std::string& key) {
+        if (table.empty()) {
+            throw std::runtime_error("Cannot erase: table is empty");
         }
-        return os;
-    }
-    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //!!!!!!!!!!! Zadacha 3!!!!!!!!!!!!!!!
-    //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    T find_kth_from_end(size_t k) const {
-        if (k >= list_size) {
-            throw std::out_of_range("Index out of range");
-        }
-        Node* first = head;
-        Node* second = head;
-        for (size_t i = 0; i < k; ++i) {
-            if (second == nullptr) {
-                throw std::out_of_range("Index out of range");
+        size_t index = hash_function(key);
+        for (auto& entry : table[index]) {
+            if (std::get<0>(entry) == key && std::get<2>(entry)) {
+                std::get<2>(entry) = false;
+                count_element--;
+                return;
             }
-            second = second->next;
         }
-        while (second->next != nullptr) {
-            first = first->next;
-            second = second->next;
-        }
-        return first->data;
+        throw std::runtime_error("Cannot erase: element '" + key + "' not found");
     }
 
-    class Iterator {
-        Node* curr;
-
-    public:
-        Iterator(Node* node) : curr(node) {}
-
-        Iterator& operator++() {
-            if (!curr->next) {
-                throw std::out_of_range("Out of range");
-            }
-            curr = curr->next;
-            return *this;
-        }
-
-        Iterator operator++(int) {
-            if (!curr->next) {
-                throw std::out_of_range("Out of range");
-            }
-            Iterator copy = *this;
-            curr = curr->next;
-            return copy;
-        }
-
-        T& operator*() {
-            return curr->data;
-        }
-
-        T* operator->() {
-            return &(curr->data);
-        }
-
-        friend bool operator!=(const Iterator& it1, const Iterator& it2) {
-            return it1.curr != it2.curr;
-        }
-
-        friend bool operator==(const Iterator& it1, const Iterator& it2) {
-            return it1.curr == it2.curr;
-        }
-    };
-
-    Iterator begin() {
-        return Iterator(head);
+    int size() {
+        return table.size();
     }
 
-    Iterator end() {
-        return Iterator(nullptr);
+    int count() {
+        return count_element;
+    }
+
+    bool empty() {
+        return count_element == 0;
     }
 };
-
-
-
-template<typename T>
-class Queue {
-private:
-    std::deque<T> data;
-
-public:
-    Queue(int n = 0, T value = T()) {
-        if (n < 0) {
-            throw std::invalid_argument("negative size");
-        }
-        for (int i = 0; i < n; ++i) {
-            data.push_back(value);
-        }
-    }
-
-    void enqueue(const T& val) noexcept {
-        data.push_back(val);
-    }
-
-    void dequeue() {
-        if (isEmpty()) {
-            throw std::underflow_error("Queue Empty");
-        }
-        data.pop_front();
-    }
-
-    T& front() {
-        if (isEmpty()) {
-            throw std::underflow_error("Queue Empty");
-        }
-        return data.front();
-    }
-
-    bool isEmpty() const noexcept {
-        return data.empty();
-    }
-
-    size_t getSize() const noexcept {
-        return data.size();
-    }
-};
-
