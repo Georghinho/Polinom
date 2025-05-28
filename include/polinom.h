@@ -13,6 +13,7 @@ struct Monom {
     double coeff = 0.0;
 
     Monom() = default;
+
     Monom(int deg, double c) : degree(deg), coeff(c) {
         validateDegree();
     }
@@ -20,6 +21,32 @@ struct Monom {
     explicit Monom(const std::string& str) {
         if (str.empty() || str == "0") {
             coeff = 0.0;
+            degree = 0;
+            return;
+        }
+        char first = str[0];
+        if (first != '+' && first != '-' && !std::isdigit(first) && first != '.' &&
+            first != 'x' && first != 'y' && first != 'z') {
+            size_t pos = 0;
+            while (pos < str.size() &&
+                !std::isdigit(str[pos]) &&
+                str[pos] != '+' &&
+                str[pos] != '-' &&
+                str[pos] != '.')
+            {
+                ++pos;
+            }
+            if (pos < str.size()) {
+                try {
+                    coeff = std::stod(str.substr(pos));
+                }
+                catch (...) {
+                    coeff = 0.0;
+                }
+            }
+            else {
+                coeff = 0.0;
+            }
             degree = 0;
             return;
         }
@@ -31,16 +58,12 @@ private:
     void parseWithStateMachine(const std::string& str) {
         size_t pos = 0;
         while (pos < str.size() && std::isspace(str[pos])) pos++;
-
         bool negative = false;
         if (pos < str.size() && (str[pos] == '+' || str[pos] == '-')) {
-            if (str[pos] == '-') {
-                negative = true;
-            }
+            if (str[pos] == '-') negative = true;
             pos++;
             while (pos < str.size() && std::isspace(str[pos])) pos++;
         }
-
         double coef = 1.0;
         if (pos < str.size() && (std::isdigit(str[pos]) || str[pos] == '.')) {
             size_t end_pos = pos;
@@ -54,7 +77,6 @@ private:
             while (pos < str.size() && std::isspace(str[pos])) pos++;
         }
         if (negative) coef = -coef;
-
         int x_pow = 0, y_pow = 0, z_pow = 0;
         while (pos < str.size()) {
             char var = str[pos];
@@ -78,15 +100,13 @@ private:
         }
         if (x_pow > 9 || y_pow > 9 || z_pow > 9)
             throw std::runtime_error("Degree overflow in monom: exponent too large (max 9)");
-
         coeff = coef;
         degree = x_pow * 100 + y_pow * 10 + z_pow;
     }
 
     int parseExponent(const std::string& str, size_t& pos) {
-        if (pos >= str.size() || !std::isdigit(str[pos])) {
+        if (pos >= str.size() || !std::isdigit(str[pos]))
             throw std::runtime_error("Expected exponent after '^'");
-        }
         int exponent = 0;
         while (pos < str.size() && std::isdigit(str[pos])) {
             exponent = exponent * 10 + (str[pos] - '0');
@@ -112,34 +132,27 @@ public:
         return std::abs(coeff - other.coeff) < 1e-10 && degree == other.degree;
     }
     bool operator!=(const Monom& other) const { return !(*this == other); }
-
     Monom operator+(const Monom& other) const {
-        if (degree != other.degree) {
+        if (degree != other.degree)
             throw std::runtime_error("Cannot add monoms with different degrees");
-        }
         return Monom(degree, coeff + other.coeff);
     }
-
     Monom operator-(const Monom& other) const {
-        if (degree != other.degree) {
+        if (degree != other.degree)
             throw std::runtime_error("Cannot subtract monoms with different degrees");
-        }
         return Monom(degree, coeff - other.coeff);
     }
-
     Monom operator*(double val) const {
         if (std::abs(val) < 1e-10)
             return Monom(0, 0.0);
         return Monom(degree, coeff * val);
     }
-
     Monom operator*(const Monom& other) const {
         int new_degree = degree + other.degree;
-        if ((new_degree / 100) > 9 || ((new_degree / 10) % 10 > 9 || (new_degree % 10) > 9))
+        if ((new_degree / 100) > 9 || (((new_degree / 10) % 10) > 9) || (new_degree % 10) > 9)
             throw std::runtime_error("Degree overflow in monom multiplication");
         return Monom(new_degree, coeff * other.coeff);
     }
-
     friend std::ostream& operator<<(std::ostream& os, const Monom& m) {
         if (m.coeff == 1.0 && m.degree != 0) {
         }
@@ -152,7 +165,8 @@ public:
         auto printVar = [&](char var, int power) {
             if (power > 0) {
                 os << var;
-                if (power > 1) os << "^" << power;
+                if (power > 1)
+                    os << "^" << power;
             }
             };
         printVar('x', m.degree / 100);
@@ -176,7 +190,8 @@ private:
                     terms.push_back(current);
                     current.clear();
                 }
-                if (c == '-') current.push_back('-');
+                if (c == '-')
+                    current.push_back('-');
                 has_content = false;
             }
             else if (!std::isspace(c)) {
@@ -184,8 +199,8 @@ private:
                 has_content = true;
             }
         }
-        if (has_content) terms.push_back(current);
-
+        if (has_content)
+            terms.push_back(current);
         for (const auto& term : terms) {
             if (!term.empty()) {
                 Monom m(term);
@@ -222,10 +237,8 @@ public:
         if (!str.empty())
             parsePolinom(str);
     }
-
     Polinom(const Polinom&) = default;
     Polinom& operator=(const Polinom&) = default;
-
     Polinom operator+(const Polinom& other) const {
         Polinom result;
         size_t i = 0, j = 0;
@@ -253,9 +266,9 @@ public:
             result.monoms.push_back(other.monoms[j]);
             ++j;
         }
+        result.combineLikeTerms();
         return result;
     }
-
     Polinom operator-(const Polinom& other) const {
         Polinom result;
         size_t i = 0, j = 0;
@@ -283,9 +296,9 @@ public:
             result.monoms.push_back(Monom(other.monoms[j].degree, -other.monoms[j].coeff));
             ++j;
         }
+        result.combineLikeTerms();
         return result;
     }
-
     Polinom operator*(const Polinom& other) const {
         Polinom result;
         for (const auto& m1 : monoms) {
@@ -302,9 +315,9 @@ public:
             }
             result = result + temp;
         }
+        result.combineLikeTerms();
         return result;
     }
-
     Polinom operator*(double scalar) const {
         Polinom result;
         for (const auto& m : monoms) {
@@ -312,13 +325,12 @@ public:
             if (std::fabs(product.coeff) > 1e-10)
                 result.monoms.push_back(product);
         }
+        result.combineLikeTerms();
         return result;
     }
-
     size_t size() const { return monoms.size(); }
     bool empty() const { return monoms.empty(); }
     const std::vector<Monom>& getMonoms() const { return monoms; }
-
     bool operator==(const Polinom& other) const {
         if (monoms.size() != other.monoms.size())
             return false;
@@ -328,7 +340,6 @@ public:
         return true;
     }
     bool operator!=(const Polinom& other) const { return !(*this == other); }
-
     friend std::ostream& operator<<(std::ostream& os, const Polinom& p) {
         if (p.monoms.empty()) {
             os << "0";
@@ -341,7 +352,6 @@ public:
         }
         return os;
     }
-
     void print() const {
         std::cout << *this << std::endl;
     }
