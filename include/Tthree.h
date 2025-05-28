@@ -1,4 +1,4 @@
-﻿﻿#pragma once
+﻿#pragma once
 #include "polinom.h"
 
 template <class Tkey, class Tvalue>

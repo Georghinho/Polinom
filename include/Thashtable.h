@@ -1,8 +1,9 @@
-﻿﻿#pragma once
+﻿#pragma once
 #include <vector>
 #include <cmath>
 #include <ctime>
 #include <stdexcept>
+#include <functional> // для std::hash
 #include "polinom.h"
 
 template <class Tkey, class Tvalue>
@@ -11,8 +12,8 @@ private:
     struct tuple {
         Tkey key;
         Tvalue value;
-        bool flag;      // Флаг удаления (true - удалён)
-        bool empty;     // Флаг пустой ячейки
+        bool flag;   // Флаг удаления (true - удалён)
+        bool empty;  // Флаг пустой ячейки
 
         tuple() : flag(false), empty(true) {}
         tuple(Tkey k) : key(k), value(Tvalue()), flag(false), empty(true) {}
@@ -52,11 +53,12 @@ public:
     HashO(int initialCapacity = 157) : size(0), capacity(initialCapacity) {
         if (capacity <= 0) capacity = 157;
         table.resize(capacity);
-        std::srand(std::time(nullptr));
+        std::srand(static_cast<unsigned int>(std::time(nullptr)));
         a = (std::abs(std::rand()) % (simpleNum - 1)) + 1;
         b = std::abs(std::rand()) % simpleNum;
     }
 
+    // Хеш-функция для полинома
     int Hash(const Polinom& p) const {
         unsigned long long hash = 0;
         for (const auto& m : p.getMonoms()) {
@@ -67,8 +69,15 @@ public:
         return ((a * hash + b) % simpleNum) % capacity;
     }
 
+    // Хеш-функция для int
     int Hash(const int& key) const {
         return ((a * key + b) % simpleNum) % capacity;
+    }
+
+    // Новая перегрузка для std::string
+    int Hash(const std::string& key) const {
+        size_t hashValue = std::hash<std::string>{}(key);
+        return ((a * static_cast<long long>(hashValue) + b) % simpleNum) % capacity;
     }
 
     void insert(const Tkey& key, const Tvalue& value) {
@@ -123,7 +132,6 @@ public:
     void erase(const Tkey& key) {
         int index = Hash(key);
         int startIndex = index;
-
         do {
             if (table[index].getEmpty() && !table[index].getFlag()) {
                 throw std::runtime_error("Key not found");
@@ -142,7 +150,6 @@ public:
     Tvalue& operator[](const Tkey& key) {
         int index = Hash(key);
         int startIndex = index;
-
         do {
             if (table[index].getEmpty() && !table[index].getFlag()) {
                 throw std::runtime_error("Key not found");

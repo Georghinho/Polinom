@@ -1,4 +1,5 @@
-﻿#include <iostream>
+﻿#pragma once
+#include <iostream>
 #include <vector>
 #include <tuple>
 #include <string>
@@ -111,5 +112,16 @@ public:
 
     bool empty() {
         return count_element == 0;
+    }
+
+    // Новый метод для печати всех сохранённых полиномов
+    void print() const {
+        for (const auto& bucket : table) {
+            for (const auto& entry : bucket) {
+                if (std::get<2>(entry)) {
+                    std::cout << std::get<0>(entry) << ": " << std::get<1>(entry) << "\n";
+                }
+            }
+        }
     }
 };
